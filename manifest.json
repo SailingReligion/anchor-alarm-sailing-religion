@@ -1,0 +1,21 @@
+{
+  "name": "Anchor Alarm - Sailing Religion",
+  "short_name": "Anchor Alarm",
+  "description": "Peace of mind at anchor",
+  "start_url": "./anchoralarm3.html",
+  "display": "standalone",
+  "background_color": "#001f3f",
+  "theme_color": "#FFD700",
+  "icons": [
+    {
+      "src": "logosr.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logosr.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

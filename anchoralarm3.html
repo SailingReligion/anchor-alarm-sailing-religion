@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anchor Alarm - Sailing Religion</title>
+    <!-- PWA Configuration -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#FFD700">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Anchor Alarm">
+
+<!-- Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(function(registration) {
+        console.log('Service Worker registrado exitosamente:', registration.scope);
+      })
+      .catch(function(error) {
+        console.log('Error al registrar Service Worker:', error);
+      });
+  });
+}
+</script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #001f3f;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            color: #FFD700;
+            margin-bottom: 5px;
+        }
+        .header h1 a {
+            text-decoration: none;
+            color: inherit;
+        }
+        .header p {
+            font-size: 1.1em;
+            color: #ADD8E6;
+        }
+        .container {
+            background-color: #003366;
+            border: 2px solid #FFD700;
+            border-radius: 10px;
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+            font-weight: bold;
+        }
+        select {
+            background-color: #004080;
+            color: white;
+            border: 1px solid #ADD8E6;
+            border-radius: 5px;
+            padding: 8px;
+            font-size: 1em;
+            width: 80%;
+            margin-bottom: 10px;
+        }
+        select option {
+            background-color: #004080;
+            color: white;
+        }
+        input[type="range"] {
+            width: 80%;
+            -webkit-appearance: none;
+            height: 10px;
+            background: #ADD8E6;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #FFD700;
+            cursor: pointer;
+        }
+        button {
+            background-color: #008CBA;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.2em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #005f8a;
+        }
+        .status-display {
+            font-size: 1.4em;
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ADD8E6;
+            border-radius: 5px;
+            background-color: #004080;
+        }
+        .alarm-status {
+            color: #FF4500;
+            font-weight: bold;
+        }
+        .safe-status {
+            color: #32CD32;
+            font-weight: bold;
+        }
+        .logo-container {
+            margin-bottom: 20px;
+        }
+        .logo-container img {
+            max-width: 150px;
+            height: auto;
+        }
+        .restore-info {
+            background-color: #004080;
+            border: 1px solid #32CD32;
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            color: #32CD32;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-container" id="logoContainer"></div>
+        <h1><a href="https://www.sailingreligion.com" target="_blank">Sailing Religion</a></h1>
+        <p>Anchor Alarm - Peace of mind at anchor</p>
+    </div>
+    <div class="container">
+        <div id="restoreInfo" class="restore-info" style="display: none;">
+            ⚓ Previous anchor position restored!
+        </div>
+
+        <div class="control-group">
+            <label for="unitSelector">Units:</label>
+            <select id="unitSelector">
+                <option value="meters">Meters</option>
+                <option value="feet">Feet</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="anchorRadius">Safety Radius: <span id="radiusValue">50</span> <span id="unitLabel">meters</span></label>
+            <input type="range" id="anchorRadius" min="20" max="200" value="50">
+        </div>
+
+        <button id="setAnchorBtn">SET ANCHOR</button>
+        <button id="resetBtn">RESET</button>
+        <button id="silenceBtn">SILENCE ALARM</button>
+
+        <div class="status-display">
+            <p>Status: <span id="alarmStatus" class="safe-status">SAFE ✅</span></p>
+            <p>Distance from Anchor: <span id="distanceValue">--</span> <span id="distanceUnit">meters</span></p>
+            <p>Current Position: <span id="currentLat">--</span>, <span id="currentLon">--</span></p>
+            <p>Anchor Position: <span id="anchorLat">--</span>, <span id="anchorLon">--</span></p>
+        </div>
+    </div>
+
+    <script>
+        let watchId;
+        let anchorLat = null;
+        let anchorLon = null;
+        let anchorRadius = 50;
+        let currentUnit = 'meters';
+        let isAlarmActive = false;
+        let audioAlarm = new Audio('alarm_sailing_religion.wav');
+        let gpsPermissionGranted = false;
+
+        const setAnchorBtn = document.getElementById('setAnchorBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const silenceBtn = document.getElementById('silenceBtn');
+        const anchorRadiusSlider = document.getElementById('anchorRadius');
+        const radiusValueSpan = document.getElementById('radiusValue');
+        const alarmStatusSpan = document.getElementById('alarmStatus');
+        const distanceValueSpan = document.getElementById('distanceValue');
+        const currentLatSpan = document.getElementById('currentLat');
+        const currentLonSpan = document.getElementById('currentLon');
+        const anchorLatSpan = document.getElementById('anchorLat');
+        const anchorLonSpan = document.getElementById('anchorLon');
+        const unitSelector = document.getElementById('unitSelector');
+        const unitLabel = document.getElementById('unitLabel');
+        const distanceUnit = document.getElementById('distanceUnit');
+        const restoreInfo = document.getElementById('restoreInfo');
+
+        // Funciones para guardar y cargar configuración
+        function saveConfig() {
+            const config = {
+                anchorLat: anchorLat,
+                anchorLon: anchorLon,
+                anchorRadius: anchorRadius,
+                currentUnit: currentUnit,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('sailingReligionAnchorAlarm', JSON.stringify(config));
+        }
+
+        function loadConfig() {
+            try {
+                const saved = localStorage.getItem('sailingReligionAnchorAlarm');
+                if (saved) {
+                    const config = JSON.parse(saved);
+                    // Solo restaurar si es de las últimas 24 horas
+                    if (Date.now() - config.timestamp < 24 * 60 * 60 * 1000) {
+                        anchorLat = config.anchorLat;
+                        anchorLon = config.anchorLon;
+                        anchorRadius = config.anchorRadius || 50;
+                        currentUnit = config.currentUnit || 'meters';
+                        
+                        // Actualizar interfaz
+                        if (anchorLat && anchorLon) {
+                            anchorLatSpan.textContent = anchorLat.toFixed(6);
+                            anchorLonSpan.textContent = anchorLon.toFixed(6);
+                            alarmStatusSpan.textContent = 'Anchor restored. Monitoring...';
+                            alarmStatusSpan.className = 'safe-status';
+                            restoreInfo.style.display = 'block';
+                            setTimeout(() => {
+                                restoreInfo.style.display = 'none';
+                            }, 5000);
+                        }
+                        
+                        unitSelector.value = currentUnit;
+                        updateUnits();
+                        return true;
+                    }
+                }
+            } catch (e) {
+                console.warn('Error loading saved config:', e);
+            }
+            return false;
+        }
+
+        function clearConfig() {
+            localStorage.removeItem('sailingReligionAnchorAlarm');
+        }
+
+        // Funciones de conversión
+        function metersToFeet(meters) {
+            return meters * 3.28084;
+        }
+
+        function feetToMeters(feet) {
+            return feet / 3.28084;
+        }
+
+        // Función para actualizar la interfaz según la unidad
+        function updateUnits() {
+            currentUnit = unitSelector.value;
+            unitLabel.textContent = currentUnit;
+            distanceUnit.textContent = currentUnit;
+            
+            if (currentUnit === 'feet') {
+                const radiusInFeet = Math.round(metersToFeet(anchorRadius));
+                anchorRadiusSlider.min = Math.round(metersToFeet(20));
+                anchorRadiusSlider.max = Math.round(metersToFeet(200));
+                anchorRadiusSlider.value = radiusInFeet;
+                radiusValueSpan.textContent = radiusInFeet;
+            } else {
+                anchorRadiusSlider.min = 20;
+                anchorRadiusSlider.max = 200;
+                anchorRadiusSlider.value = anchorRadius;
+                radiusValueSpan.textContent = anchorRadius;
+            }
+            saveConfig(); // Guardar cambios
+        }
+
+        // Event listener para el selector de unidades
+        unitSelector.addEventListener('change', updateUnits);
+
+        // Event listener para el slider
+        anchorRadiusSlider.addEventListener('input', () => {
+            const sliderValue = parseInt(anchorRadiusSlider.value);
+            
+            if (currentUnit === 'feet') {
+                anchorRadius = feetToMeters(sliderValue);
+                radiusValueSpan.textContent = sliderValue;
+            } else {
+                anchorRadius = sliderValue;
+                radiusValueSpan.textContent = sliderValue;
+            }
+            saveConfig(); // Guardar cambios
+        });
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                      Math.cos(φ1) * Math.cos(φ2) *
+                      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const d = R * c;
+            return d;
+        }
+
+        function activateAlarm() {
+            if (!isAlarmActive) {
+                isAlarmActive = true;
+                alarmStatusSpan.textContent = 'DRAG ALERT! 🚨';
+                alarmStatusSpan.className = 'alarm-status';
+                if (audioAlarm) {
+                    audioAlarm.loop = true;
+                    audioAlarm.play().catch(e => console.error("Audio error:", e));
+                }
+                if (navigator.vibrate) {
+                    navigator.vibrate([1000, 500, 1000, 500, 1000]);
+                }
+            }
+        }
+
+        function silenceAlarm() {
+            isAlarmActive = false;
+            if (audioAlarm) {
+                audioAlarm.pause();
+                audioAlarm.currentTime = 0;
+            }
+            if (navigator.vibrate) {
+                navigator.vibrate(0);
+            }
+        }
+
+        function handlePosition(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            currentLatSpan.textContent = lat.toFixed(6);
+            currentLonSpan.textContent = lon.toFixed(6);
+            
+            if (anchorLat !== null && anchorLon !== null) {
+                const distance = calculateDistance(anchorLat, anchorLon, lat, lon);
+                
+                const displayDistance = currentUnit === 'feet' ? metersToFeet(distance) : distance;
+                distanceValueSpan.textContent = displayDistance.toFixed(1);
+                
+                if (distance > anchorRadius) {
+                    activateAlarm();
+                } else {
+                    if (alarmStatusSpan.classList.contains('alarm-status')) {
+                        alarmStatusSpan.textContent = 'SAFE ✅';
+                        alarmStatusSpan.className = 'safe-status';
+                    }
+                    if (isAlarmActive && distance <= anchorRadius) {
+                        silenceAlarm();
+                    }
+                }
+            } else {
+                distanceValueSpan.textContent = '--';
+                if (!anchorLat && !anchorLon) {
+                    alarmStatusSpan.textContent = 'Waiting for anchor...';
+                    alarmStatusSpan.className = 'safe-status';
+                }
+            }
+        }
+
+        function handleError(error) {
+            let errorMessage = '';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage = "Location permission denied. Please enable it in your device settings.";
+                    gpsPermissionGranted = false;
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage = "Position unavailable. Make sure you have a good GPS signal.";
+                    break;
+                case error.TIMEOUT:
+                    errorMessage = "Timeout getting position. Retrying...";
+                    // No mostrar alerta para timeout, solo reintentar
+                    setTimeout(startGpsWatch, 2000);
+                    return;
+                case error.UNKNOWN_ERROR:
+                    errorMessage = "Unknown error getting position.";
+                    break;
+            }
+            
+            if (error.code !== error.TIMEOUT) {
+                console.error("GPS Error:", errorMessage);
+                alarmStatusSpan.textContent = 'GPS ERROR ❌';
+                alarmStatusSpan.className = 'alarm-status';
+            }
+        }
+
+        function startGpsWatch() {
+            if (navigator.geolocation) {
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 30000, // 30 segundos timeout
+                    maximumAge: 10000 // Usar caché de hasta 10 segundos
+                };
+                
+                if (watchId) {
+                    navigator.geolocation.clearWatch(watchId);
+                }
+                
+                watchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        gpsPermissionGranted = true;
+                        handlePosition(position);
+                    }, 
+                    handleError, 
+                    options
+                );
+            } else {
+                alert("Your browser does not support geolocation.");
+            }
+        }
+
+        setAnchorBtn.addEventListener('click', () => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    anchorLat = position.coords.latitude;
+                    anchorLon = position.coords.longitude;
+                    anchorLatSpan.textContent = anchorLat.toFixed(6);
+                    anchorLonSpan.textContent = anchorLon.toFixed(6);
+                    alert(`Anchor set at: ${anchorLat.toFixed(6)}, ${anchorLon.toFixed(6)}`);
+                    alarmStatusSpan.textContent = 'Anchor set. Monitoring...';
+                    alarmStatusSpan.className = 'safe-status';
+                    saveConfig(); // Guardar la nueva posición
+                    if (!watchId || !gpsPermissionGranted) {
+                        startGpsWatch();
+                    }
+                }, handleError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            } else {
+                alert("Your browser does not support geolocation.");
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            anchorLat = null;
+            anchorLon = null;
+            anchorLatSpan.textContent = '--';
+            anchorLonSpan.textContent = '--';
+            distanceValueSpan.textContent = '--';
+            alarmStatusSpan.textContent = 'Ready to set anchor.';
+            alarmStatusSpan.className = 'safe-status';
+            silenceAlarm();
+            clearConfig(); // Limpiar configuración guardada
+            if (watchId) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            // Reiniciar el GPS watch
+            setTimeout(startGpsWatch, 1000);
+        });
+
+        silenceBtn.addEventListener('click', silenceAlarm);
+
+        // Manejar visibilidad de la página
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && gpsPermissionGranted) {
+                // Página visible de nuevo, reiniciar GPS si es necesario
+                if (!watchId && (anchorLat || anchorLon)) {
+                    setTimeout(startGpsWatch, 1000);
+                }
+            }
+        });
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            // Cargar configuración guardada
+            const configLoaded = loadConfig();
+            
+            // Iniciar GPS
+            startGpsWatch();
+            
+            // Si se cargó configuración con ancla, mostrar mensaje
+            if (configLoaded && anchorLat && anchorLon) {
+                console.log('Previous anchor position restored');
+            }
+        });
+
+        function insertLogo(logoUrl) {
+            const logoContainer = document.getElementById('logoContainer');
+            if (logoUrl) {
+                const img = document.createElement('img');
+                img.src = logoUrl;
+                img.alt = 'Sailing Religion Logo';
+                logoContainer.appendChild(img);
+            }
+        }
+        
+        // Insertar logo (ajusta el nombre de tu archivo)
+        insertLogo('logosr.png');
+    </script>
+</body>
+</html>
