@@ -182,15 +182,6 @@ if ('serviceWorker' in navigator) {
             max-width: 150px;
             height: auto;
         }
-        .restore-info {
-            background-color: #004080;
-            border: 1px solid #32CD32;
-            border-radius: 5px;
-            padding: 10px;
-            margin-bottom: 15px;
-            font-size: 0.9em;
-            color: #32CD32;
-        }
         .wake-active {
             color: #32CD32;
             font-weight: bold;
@@ -382,9 +373,6 @@ if ('serviceWorker' in navigator) {
         <p>Anchor Alarm - Peace of mind at anchor</p>
     </div>
     <div class="container">
-        <div id="restoreInfo" class="restore-info" style="display: none;">
-            ⚓ Previous anchor position restored!
-        </div>
 
         <div class="control-group">
             <label for="unitSelector">Units:</label>
@@ -444,7 +432,6 @@ if ('serviceWorker' in navigator) {
         const unitSelector = document.getElementById('unitSelector');
         const unitLabel = document.getElementById('unitLabel');
         const distanceUnit = document.getElementById('distanceUnit');
-        const restoreInfo = document.getElementById('restoreInfo');
         const wakeLockStatusSpan = document.getElementById('wakeLockStatus');
         const wakeLockWarning = document.getElementById('wakeLockWarning');
 
@@ -607,55 +594,37 @@ if ('serviceWorker' in navigator) {
             }
         }
 
-        // Funciones para guardar y cargar configuración
-        function saveConfig() {
-            const config = {
-                anchorLat: anchorLat,
-                anchorLon: anchorLon,
+        // ============================================================
+        //  PREFERENCIAS DEL USUARIO (solo radio y unidad)
+        // ============================================================
+        // POR SEGURIDAD: NO se guarda ni se restaura la posición del ancla.
+        // La app SIEMPRE arranca en estado limpio (sin ancla fijada y sin alarma).
+        // El usuario DEBE pulsar "SET ANCHOR" manualmente cada vez. Esto evita
+        // restaurar por error un fondeo anterior hecho en otra ubicación.
+        // En localStorage solo se conservan las preferencias de visualización.
+        const PREFS_KEY = 'sailingReligionAnchorAlarmPrefs';
+
+        function savePreferences() {
+            const prefs = {
                 anchorRadius: anchorRadius,
-                currentUnit: currentUnit,
-                timestamp: Date.now()
+                currentUnit: currentUnit
             };
-            localStorage.setItem('sailingReligionAnchorAlarm', JSON.stringify(config));
+            localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
         }
 
-        function loadConfig() {
+        function loadPreferences() {
             try {
-                const saved = localStorage.getItem('sailingReligionAnchorAlarm');
+                const saved = localStorage.getItem(PREFS_KEY);
                 if (saved) {
-                    const config = JSON.parse(saved);
-                    // Solo restaurar si es de las últimas 24 horas
-                    if (Date.now() - config.timestamp < 24 * 60 * 60 * 1000) {
-                        anchorLat = config.anchorLat;
-                        anchorLon = config.anchorLon;
-                        anchorRadius = config.anchorRadius || 50;
-                        currentUnit = config.currentUnit || 'meters';
-                        
-                        // Actualizar interfaz
-                        if (anchorLat && anchorLon) {
-                            anchorLatSpan.textContent = anchorLat.toFixed(6);
-                            anchorLonSpan.textContent = anchorLon.toFixed(6);
-                            alarmStatusSpan.textContent = 'Anchor restored. Monitoring...';
-                            alarmStatusSpan.className = 'safe-status';
-                            restoreInfo.style.display = 'block';
-                            setTimeout(() => {
-                                restoreInfo.style.display = 'none';
-                            }, 5000);
-                        }
-                        
-                        unitSelector.value = currentUnit;
-                        updateUnits();
-                        return true;
-                    }
+                    const prefs = JSON.parse(saved);
+                    anchorRadius = prefs.anchorRadius || 50;
+                    currentUnit = prefs.currentUnit || 'meters';
+                    unitSelector.value = currentUnit;
+                    updateUnits();
                 }
             } catch (e) {
-                console.warn('Error loading saved config:', e);
+                console.warn('Error loading saved preferences:', e);
             }
-            return false;
-        }
-
-        function clearConfig() {
-            localStorage.removeItem('sailingReligionAnchorAlarm');
         }
 
         // Funciones de conversión
@@ -685,7 +654,7 @@ if ('serviceWorker' in navigator) {
                 anchorRadiusSlider.value = anchorRadius;
                 radiusValueSpan.textContent = anchorRadius;
             }
-            saveConfig(); // Guardar cambios
+            savePreferences(); // Save user preferences (radius + unit)
         }
 
         // Event listener para el selector de unidades
@@ -702,7 +671,7 @@ if ('serviceWorker' in navigator) {
                 anchorRadius = sliderValue;
                 radiusValueSpan.textContent = sliderValue;
             }
-            saveConfig(); // Guardar cambios
+            savePreferences(); // Save user preferences (radius + unit)
         });
 
         function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -841,8 +810,7 @@ if ('serviceWorker' in navigator) {
                     alert(`Anchor set at: ${anchorLat.toFixed(6)}, ${anchorLon.toFixed(6)}`);
                     alarmStatusSpan.textContent = 'Anchor set. Monitoring...';
                     alarmStatusSpan.className = 'safe-status';
-                    saveConfig(); // Guardar la nueva posición
-                    // Mantener la pantalla y el GPS activos mientras se monitorea el fondeo
+                    // Keep the screen and GPS active while monitoring the anchor
                     requestWakeLock();
                     if (!watchId || !gpsPermissionGranted) {
                         startGpsWatch();
@@ -862,8 +830,7 @@ if ('serviceWorker' in navigator) {
             alarmStatusSpan.textContent = 'Ready to set anchor.';
             alarmStatusSpan.className = 'safe-status';
             silenceAlarm();
-            releaseWakeLock(); // Liberar el bloqueo de pantalla al detener el monitoreo
-            clearConfig(); // Limpiar configuración guardada
+            releaseWakeLock(); // Release the screen lock when monitoring stops
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
@@ -891,24 +858,20 @@ if ('serviceWorker' in navigator) {
             }
         });
 
-        // Inicialización
+        // Initialization
         document.addEventListener('DOMContentLoaded', () => {
-            // Cargar configuración guardada
-            const configLoaded = loadConfig();
-            
-            // Mostrar advertencia si el navegador no soporta Wake Lock
+            // Load user preferences only (radius + unit). The anchor position is
+            // never restored: the app always starts clean and the user must press
+            // SET ANCHOR manually for safety.
+            loadPreferences();
+
+            // Show a warning if the browser does not support Wake Lock
             if (!wakeLockSupported) {
                 wakeLockWarning.style.display = 'block';
             }
 
-            // Iniciar GPS
+            // Start GPS
             startGpsWatch();
-            
-            // Si se cargó configuración con ancla, mostrar mensaje y mantener pantalla activa
-            if (configLoaded && anchorLat && anchorLon) {
-                console.log('Previous anchor position restored');
-                requestWakeLock();
-            }
         });
 
         function insertLogo(logoUrl) {
