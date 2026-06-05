@@ -492,8 +492,10 @@ if ('serviceWorker' in navigator) {
         //    El modal de actualización OBLIGATORIA se mostrará automáticamente a
         //    los usuarios existentes y bloqueará el uso de la app hasta actualizar.
         // ------------------------------------------------------------
-        const APP_VERSION = 'v3';
+        const APP_VERSION = 'v4';
         const CHANGELOG = [
+            '🔒 Safety: the anchor position is no longer auto-restored on startup',
+            '⚓ The app always starts clean — you must press SET ANCHOR manually',
             '✨ Wake Lock - keeps GPS active 24/7 (even with the screen off)',
             '🎵 Ultra-optimized audio (99.5% lighter)',
             '⚡ Better offline reliability'
