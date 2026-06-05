@@ -209,21 +209,35 @@ if ('serviceWorker' in navigator) {
             color: #FFA500;
         }
 
-        /* ===== Modal de actualización de la PWA ===== */
+        /* ===== Modal de actualización FORZOSA de la PWA ===== */
+        /* Bloquea el scroll y la interacción del fondo cuando la actualización es obligatoria */
+        body.update-locked {
+            overflow: hidden;
+        }
+        /* Deshabilita visual y funcionalmente todos los controles de la app */
+        .app-disabled {
+            pointer-events: none !important;
+            opacity: 0.4 !important;
+            filter: grayscale(0.6);
+            user-select: none;
+        }
         .update-overlay {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 10, 25, 0.85);
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 8, 20, 0.92);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
             display: flex;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
+            z-index: 2147483647; /* z-index máximo posible */
             padding: 20px;
             box-sizing: border-box;
             opacity: 0;
+            overflow-y: auto;
             animation: overlayFadeIn 0.3s ease forwards;
         }
         @keyframes overlayFadeIn {
@@ -232,12 +246,12 @@ if ('serviceWorker' in navigator) {
         }
         .update-modal {
             background: linear-gradient(160deg, #003366 0%, #001f3f 100%);
-            border: 2px solid #FFD700;
+            border: 3px solid #FFA500;
             border-radius: 12px;
             padding: 28px;
             width: 100%;
-            max-width: 420px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+            max-width: 440px;
+            box-shadow: 0 0 0 4px rgba(255, 165, 0, 0.15), 0 10px 50px rgba(0, 0, 0, 0.8);
             text-align: center;
             transform: translateY(30px) scale(0.96);
             opacity: 0;
@@ -247,23 +261,56 @@ if ('serviceWorker' in navigator) {
             from { transform: translateY(30px) scale(0.96); opacity: 0; }
             to { transform: translateY(0) scale(1); opacity: 1; }
         }
+        /* Icono de advertencia con pulso para enfatizar la criticidad */
+        .update-modal .warning-icon {
+            font-size: 3em;
+            line-height: 1;
+            margin-bottom: 8px;
+            animation: warnPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes warnPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.12); opacity: 0.85; }
+        }
         .update-modal h2 {
-            color: #FFD700;
-            font-size: 1.6em;
+            color: #FFA500;
+            font-size: 1.5em;
             margin: 0 0 6px 0;
         }
         .update-modal .update-version {
             color: #ADD8E6;
-            font-size: 0.95em;
+            font-size: 0.9em;
+            margin-bottom: 16px;
+        }
+        /* Bloque de advertencia de seguridad (amarillo/naranja) */
+        .update-warning-box {
+            background-color: #4d2600;
+            border: 1px solid #FFA500;
+            border-radius: 8px;
+            padding: 14px 16px;
             margin-bottom: 18px;
+            color: #FFD27f;
+            font-size: 0.98em;
+            line-height: 1.5;
+        }
+        .update-warning-box strong {
+            color: #FFC04d;
         }
         .update-changelog {
             background-color: #00284d;
             border: 1px solid #ADD8E6;
             border-radius: 8px;
             padding: 16px 18px;
-            margin-bottom: 22px;
+            margin-bottom: 18px;
             text-align: left;
+        }
+        .update-changelog .changelog-title {
+            color: #ADD8E6;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            font-weight: bold;
         }
         .update-changelog ul {
             list-style: none;
@@ -280,40 +327,47 @@ if ('serviceWorker' in navigator) {
         .update-changelog li:last-child {
             border-bottom: none;
         }
-        .update-modal .update-btn {
-            background-color: #FFD700;
-            color: #001f3f;
+        /* Mensaje final enfático: no se puede usar la app sin actualizar */
+        .update-mandatory-note {
+            color: #FF8C00;
+            font-size: 0.9em;
             font-weight: bold;
-            font-size: 1.15em;
-            padding: 13px 25px;
+            margin-bottom: 20px;
+        }
+        .update-modal .update-btn {
+            background-color: #32CD32;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 1.25em;
+            padding: 16px 25px;
             width: 100%;
             border: none;
             border-radius: 8px;
             cursor: pointer;
+            box-shadow: 0 4px 14px rgba(50, 205, 50, 0.4);
             transition: background-color 0.3s ease, transform 0.1s ease;
             margin: 0;
         }
         .update-modal .update-btn:hover {
-            background-color: #ffe24d;
+            background-color: #28a428;
         }
         .update-modal .update-btn:active {
             transform: scale(0.98);
         }
-        .update-modal .update-later {
-            background: none;
-            border: none;
-            color: #ADD8E6;
-            font-size: 0.9em;
-            cursor: pointer;
-            margin-top: 12px;
-            text-decoration: underline;
+        .update-modal .update-btn:disabled {
+            background-color: #6c8c6c;
+            cursor: wait;
+            box-shadow: none;
         }
         @media (max-width: 480px) {
             .update-modal {
                 padding: 22px 18px;
             }
             .update-modal h2 {
-                font-size: 1.35em;
+                font-size: 1.3em;
+            }
+            .update-modal .warning-icon {
+                font-size: 2.5em;
             }
             .update-changelog li {
                 font-size: 0.95em;
@@ -442,27 +496,49 @@ if ('serviceWorker' in navigator) {
         }
 
         // ============================================================
-        //  MODAL DE ACTUALIZACIÓN + CHANGELOG
+        //  MODAL DE ACTUALIZACIÓN FORZOSA + CHANGELOG
         // ============================================================
         // 👉 PARA FUTURAS VERSIONES:
         //    1) Actualiza el número de versión en APP_VERSION.
         //    2) Reemplaza la lista CHANGELOG con los cambios de la nueva versión.
         //    3) Sube CACHE_NAME en service-worker.js (p. ej. v3 -> v4).
-        //    El modal se mostrará automáticamente a los usuarios existentes.
+        //    El modal de actualización OBLIGATORIA se mostrará automáticamente a
+        //    los usuarios existentes y bloqueará el uso de la app hasta actualizar.
         // ------------------------------------------------------------
         const APP_VERSION = 'v3';
         const CHANGELOG = [
-            '✨ Wake Lock - GPS active 24/7 (even with the screen off)',
+            '✨ Wake Lock - keeps GPS active 24/7 (even with the screen off)',
             '🎵 Ultra-optimized audio (99.5% lighter)',
-            '⚡ Better offline performance'
+            '⚡ Better offline reliability'
         ];
 
         let modalActualizacionVisible = false;
 
-        // Construye y muestra el modal de "Nueva versión disponible".
+        // Deshabilita TODOS los controles de la app para que el usuario no pueda
+        // fijar el ancla ni hacer nada hasta que actualice.
+        function bloquearAppPorActualizacion() {
+            document.body.classList.add('update-locked');
+            const contenedor = document.querySelector('.container');
+            const cabecera = document.querySelector('.header');
+            if (contenedor) contenedor.classList.add('app-disabled');
+            if (cabecera) cabecera.classList.add('app-disabled');
+            // Refuerzo: deshabilitar explícitamente todos los controles interactivos.
+            document.querySelectorAll(
+                '.container button, .container input, .container select'
+            ).forEach(function(el) {
+                el.disabled = true;
+            });
+        }
+
+        // Construye y muestra el modal de "Actualización crítica obligatoria".
+        // Este modal NO se puede cerrar: no tiene botón de cierre, ignora clics
+        // fuera y la tecla Escape. Solo "Update Now" continúa.
         function mostrarModalActualizacion() {
             if (modalActualizacionVisible) return; // evitar duplicados
             modalActualizacionVisible = true;
+
+            // Bloquear la app por completo.
+            bloquearAppPorActualizacion();
 
             const overlay = document.createElement('div');
             overlay.className = 'update-overlay';
@@ -476,24 +552,43 @@ if ('serviceWorker' in navigator) {
             }).join('');
 
             overlay.innerHTML =
-                '<div class="update-modal" role="dialog" aria-modal="true" aria-labelledby="updateTitle">' +
-                    '<h2 id="updateTitle">New version available! ⚓</h2>' +
+                '<div class="update-modal" role="alertdialog" aria-modal="true" aria-labelledby="updateTitle" aria-describedby="updateDesc">' +
+                    '<div class="warning-icon" aria-hidden="true">⚠️</div>' +
+                    '<h2 id="updateTitle">Critical Update Required</h2>' +
                     '<p class="update-version">Anchor Alarm ' + APP_VERSION + '</p>' +
-                    '<div class="update-changelog"><ul>' + itemsHtml + '</ul></div>' +
-                    '<button class="update-btn" id="updateNowBtn">Update now</button>' +
-                    '<br><button class="update-later" id="updateLaterBtn">Later</button>' +
+                    '<div class="update-warning-box" id="updateDesc">' +
+                        'This version has <strong>critical bugs that make the GPS unreliable</strong>. ' +
+                        'The old version can stop monitoring when your screen turns off, ' +
+                        'leaving your boat unprotected. <strong>You MUST update to use the app safely.</strong>' +
+                    '</div>' +
+                    '<div class="update-changelog">' +
+                        '<div class="changelog-title">What this update fixes</div>' +
+                        '<ul>' + itemsHtml + '</ul>' +
+                    '</div>' +
+                    '<p class="update-mandatory-note">⛔ You cannot use the app until you update.</p>' +
+                    '<button class="update-btn" id="updateNowBtn">Update Now</button>' +
                 '</div>';
 
             document.body.appendChild(overlay);
 
-            // Botón "Actualizar ahora": activa el nuevo SW y recarga.
+            // Único botón disponible: "Update Now".
             document.getElementById('updateNowBtn').addEventListener('click', aplicarActualizacion);
 
-            // Botón "Más tarde": cierra el modal (se volverá a ofrecer al recargar).
-            document.getElementById('updateLaterBtn').addEventListener('click', function() {
-                overlay.remove();
-                modalActualizacionVisible = false;
+            // Impedir cualquier forma de cierre del modal:
+            // 1) Clics en el overlay (fuera del modal) NO lo cierran.
+            overlay.addEventListener('click', function(e) {
+                e.stopPropagation();
             });
+            // 2) Tecla Escape bloqueada mientras el modal esté visible.
+            document.addEventListener('keydown', bloquearEscapeModal, true);
+        }
+
+        // Evita que Escape (u otras teclas de cierre) descarten el modal forzoso.
+        function bloquearEscapeModal(e) {
+            if (modalActualizacionVisible && (e.key === 'Escape' || e.key === 'Esc')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
         }
 
         // Envía SKIP_WAITING al nuevo Service Worker para que se active de inmediato.
