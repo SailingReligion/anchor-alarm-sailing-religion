@@ -1,4 +1,11 @@
-const CACHE_NAME = 'anchor-alarm-sailingreligion-v2';
+// ============================================================
+//  VERSIÓN DEL SERVICE WORKER
+//  👉 Para publicar una nueva versión: incrementa este número (v3 -> v4 ...).
+//     Al cambiar el CACHE_NAME, el navegador detecta el nuevo Service Worker,
+//     instala la nueva caché y avisa al usuario mediante el modal de actualización.
+//     Recuerda actualizar también el CHANGELOG en anchoralarm3.html.
+// ============================================================
+const CACHE_NAME = 'anchor-alarm-sailingreligion-v3';
 const urlsToCache = [
   './anchoralarm3.html',
   './manifest.json',
@@ -48,4 +55,19 @@ self.addEventListener('fetch', function(event) {
         return fetch(event.request);
       })
   );
+});
+
+// ============================================================
+//  AUTO-ACTUALIZACIÓN
+//  Escucha mensajes desde la página (anchoralarm3.html). Cuando el usuario
+//  pulsa "Actualizar ahora", la página envía { type: 'SKIP_WAITING' } y aquí
+//  forzamos al nuevo Service Worker a activarse inmediatamente (sin esperar a
+//  que se cierren todas las pestañas). Tras activarse, dispara 'controllerchange'
+//  en la página, que recarga la app con la versión nueva.
+// ============================================================
+self.addEventListener('message', function(event) {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('Service Worker: SKIP_WAITING recibido, activando nueva versión...');
+    self.skipWaiting();
+  }
 });

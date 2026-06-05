@@ -11,17 +11,55 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Anchor Alarm">
 
-<!-- Service Worker Registration -->
+<!-- ============================================================
+     REGISTRO DEL SERVICE WORKER + DETECCIÓN DE ACTUALIZACIONES
+     ============================================================ -->
 <script>
+// Referencia al Service Worker que está "esperando" para activarse.
+let nuevoServiceWorker = null;
+// Evita recargas en bucle: solo recargamos una vez al cambiar de controlador.
+let recargandoPorActualizacion = false;
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('./service-worker.js')
       .then(function(registration) {
         console.log('Service Worker registrado exitosamente:', registration.scope);
+
+        // 1) Si ya hay un SW esperando al cargar la página, mostrar el modal.
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          nuevoServiceWorker = registration.waiting;
+          mostrarModalActualizacion();
+        }
+
+        // 2) Detectar cuando se encuentra un nuevo Service Worker.
+        registration.addEventListener('updatefound', function() {
+          const instalando = registration.installing;
+          if (!instalando) return;
+          console.log('Service Worker: nueva versión encontrada, instalando...');
+
+          instalando.addEventListener('statechange', function() {
+            // Cuando el nuevo SW termina de instalarse Y ya existe un controlador
+            // activo (es decir, NO es la primera instalación), hay actualización.
+            if (instalando.state === 'installed' && navigator.serviceWorker.controller) {
+              nuevoServiceWorker = instalando;
+              mostrarModalActualizacion();
+            }
+          });
+        });
       })
       .catch(function(error) {
         console.log('Error al registrar Service Worker:', error);
       });
+
+    // 3) Cuando el nuevo SW toma el control, recargar la página una sola vez
+    //    para servir la versión actualizada de todos los archivos.
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      if (recargandoPorActualizacion) return;
+      recargandoPorActualizacion = true;
+      console.log('Service Worker: nuevo controlador activo, recargando...');
+      window.location.reload();
+    });
   });
 }
 </script>
@@ -170,6 +208,117 @@ if ('serviceWorker' in navigator) {
             font-size: 0.9em;
             color: #FFA500;
         }
+
+        /* ===== Modal de actualización de la PWA ===== */
+        .update-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 10, 25, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+            opacity: 0;
+            animation: overlayFadeIn 0.3s ease forwards;
+        }
+        @keyframes overlayFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .update-modal {
+            background: linear-gradient(160deg, #003366 0%, #001f3f 100%);
+            border: 2px solid #FFD700;
+            border-radius: 12px;
+            padding: 28px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            transform: translateY(30px) scale(0.96);
+            opacity: 0;
+            animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+        }
+        @keyframes modalSlideIn {
+            from { transform: translateY(30px) scale(0.96); opacity: 0; }
+            to { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        .update-modal h2 {
+            color: #FFD700;
+            font-size: 1.6em;
+            margin: 0 0 6px 0;
+        }
+        .update-modal .update-version {
+            color: #ADD8E6;
+            font-size: 0.95em;
+            margin-bottom: 18px;
+        }
+        .update-changelog {
+            background-color: #00284d;
+            border: 1px solid #ADD8E6;
+            border-radius: 8px;
+            padding: 16px 18px;
+            margin-bottom: 22px;
+            text-align: left;
+        }
+        .update-changelog ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        .update-changelog li {
+            color: #ffffff;
+            font-size: 1em;
+            padding: 7px 0;
+            line-height: 1.4;
+            border-bottom: 1px solid rgba(173, 216, 230, 0.15);
+        }
+        .update-changelog li:last-child {
+            border-bottom: none;
+        }
+        .update-modal .update-btn {
+            background-color: #FFD700;
+            color: #001f3f;
+            font-weight: bold;
+            font-size: 1.15em;
+            padding: 13px 25px;
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+            margin: 0;
+        }
+        .update-modal .update-btn:hover {
+            background-color: #ffe24d;
+        }
+        .update-modal .update-btn:active {
+            transform: scale(0.98);
+        }
+        .update-modal .update-later {
+            background: none;
+            border: none;
+            color: #ADD8E6;
+            font-size: 0.9em;
+            cursor: pointer;
+            margin-top: 12px;
+            text-decoration: underline;
+        }
+        @media (max-width: 480px) {
+            .update-modal {
+                padding: 22px 18px;
+            }
+            .update-modal h2 {
+                font-size: 1.35em;
+            }
+            .update-changelog li {
+                font-size: 0.95em;
+            }
+        }
     </style>
 </head>
 <body>
@@ -290,6 +439,77 @@ if ('serviceWorker' in navigator) {
                 wakeLock = null;
             }
             updateWakeLockUI(false);
+        }
+
+        // ============================================================
+        //  MODAL DE ACTUALIZACIÓN + CHANGELOG
+        // ============================================================
+        // 👉 PARA FUTURAS VERSIONES:
+        //    1) Actualiza el número de versión en APP_VERSION.
+        //    2) Reemplaza la lista CHANGELOG con los cambios de la nueva versión.
+        //    3) Sube CACHE_NAME en service-worker.js (p. ej. v3 -> v4).
+        //    El modal se mostrará automáticamente a los usuarios existentes.
+        // ------------------------------------------------------------
+        const APP_VERSION = 'v3';
+        const CHANGELOG = [
+            '✨ Wake Lock - GPS activo 24/7 (incluso con pantalla apagada)',
+            '🎵 Audio ultra-optimizado (99.5% más ligero)',
+            '⚡ Mejor rendimiento offline'
+        ];
+
+        let modalActualizacionVisible = false;
+
+        // Construye y muestra el modal de "Nueva versión disponible".
+        function mostrarModalActualizacion() {
+            if (modalActualizacionVisible) return; // evitar duplicados
+            modalActualizacionVisible = true;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'update-overlay';
+            overlay.id = 'updateOverlay';
+
+            // Generar la lista del changelog de forma segura (textContent).
+            const itemsHtml = CHANGELOG.map(function(item) {
+                const li = document.createElement('li');
+                li.textContent = item;
+                return li.outerHTML;
+            }).join('');
+
+            overlay.innerHTML =
+                '<div class="update-modal" role="dialog" aria-modal="true" aria-labelledby="updateTitle">' +
+                    '<h2 id="updateTitle">¡Nueva versión disponible! ⚓</h2>' +
+                    '<p class="update-version">Anchor Alarm ' + APP_VERSION + '</p>' +
+                    '<div class="update-changelog"><ul>' + itemsHtml + '</ul></div>' +
+                    '<button class="update-btn" id="updateNowBtn">Actualizar ahora</button>' +
+                    '<br><button class="update-later" id="updateLaterBtn">Más tarde</button>' +
+                '</div>';
+
+            document.body.appendChild(overlay);
+
+            // Botón "Actualizar ahora": activa el nuevo SW y recarga.
+            document.getElementById('updateNowBtn').addEventListener('click', aplicarActualizacion);
+
+            // Botón "Más tarde": cierra el modal (se volverá a ofrecer al recargar).
+            document.getElementById('updateLaterBtn').addEventListener('click', function() {
+                overlay.remove();
+                modalActualizacionVisible = false;
+            });
+        }
+
+        // Envía SKIP_WAITING al nuevo Service Worker para que se active de inmediato.
+        // El listener 'controllerchange' (en el <head>) recargará la página al activarse.
+        function aplicarActualizacion() {
+            const btn = document.getElementById('updateNowBtn');
+            if (btn) {
+                btn.textContent = 'Actualizando... ⚓';
+                btn.disabled = true;
+            }
+            if (nuevoServiceWorker) {
+                nuevoServiceWorker.postMessage({ type: 'SKIP_WAITING' });
+            } else {
+                // Respaldo: si por alguna razón no hay referencia, recargar igualmente.
+                window.location.reload();
+            }
         }
 
         // Funciones para guardar y cargar configuración
