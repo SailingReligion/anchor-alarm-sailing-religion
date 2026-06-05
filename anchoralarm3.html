@@ -452,9 +452,9 @@ if ('serviceWorker' in navigator) {
         // ------------------------------------------------------------
         const APP_VERSION = 'v3';
         const CHANGELOG = [
-            '✨ Wake Lock - GPS activo 24/7 (incluso con pantalla apagada)',
-            '🎵 Audio ultra-optimizado (99.5% más ligero)',
-            '⚡ Mejor rendimiento offline'
+            '✨ Wake Lock - GPS active 24/7 (even with the screen off)',
+            '🎵 Ultra-optimized audio (99.5% lighter)',
+            '⚡ Better offline performance'
         ];
 
         let modalActualizacionVisible = false;
@@ -477,11 +477,11 @@ if ('serviceWorker' in navigator) {
 
             overlay.innerHTML =
                 '<div class="update-modal" role="dialog" aria-modal="true" aria-labelledby="updateTitle">' +
-                    '<h2 id="updateTitle">¡Nueva versión disponible! ⚓</h2>' +
+                    '<h2 id="updateTitle">New version available! ⚓</h2>' +
                     '<p class="update-version">Anchor Alarm ' + APP_VERSION + '</p>' +
                     '<div class="update-changelog"><ul>' + itemsHtml + '</ul></div>' +
-                    '<button class="update-btn" id="updateNowBtn">Actualizar ahora</button>' +
-                    '<br><button class="update-later" id="updateLaterBtn">Más tarde</button>' +
+                    '<button class="update-btn" id="updateNowBtn">Update now</button>' +
+                    '<br><button class="update-later" id="updateLaterBtn">Later</button>' +
                 '</div>';
 
             document.body.appendChild(overlay);
@@ -501,7 +501,7 @@ if ('serviceWorker' in navigator) {
         function aplicarActualizacion() {
             const btn = document.getElementById('updateNowBtn');
             if (btn) {
-                btn.textContent = 'Actualizando... ⚓';
+                btn.textContent = 'Updating... ⚓';
                 btn.disabled = true;
             }
             if (nuevoServiceWorker) {
