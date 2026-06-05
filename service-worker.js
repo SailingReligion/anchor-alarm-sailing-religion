@@ -1,8 +1,9 @@
-const CACHE_NAME = 'anchor-alarm-sailingreligion-v1';
+const CACHE_NAME = 'anchor-alarm-sailingreligion-v2';
 const urlsToCache = [
   './anchoralarm3.html',
+  './manifest.json',
   './logosr.png',
-  './alarm_sailing_religion.wav'
+  './alarm_sailing_religion.mp3'
 ];
 
 // Instalar Service Worker y guardar archivos en caché

@@ -153,6 +153,23 @@ if ('serviceWorker' in navigator) {
             font-size: 0.9em;
             color: #32CD32;
         }
+        .wake-active {
+            color: #32CD32;
+            font-weight: bold;
+        }
+        .wake-inactive {
+            color: #ADD8E6;
+            font-weight: bold;
+        }
+        .wake-warning {
+            background-color: #4d2600;
+            border: 1px solid #FFA500;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 15px;
+            font-size: 0.9em;
+            color: #FFA500;
+        }
     </style>
 </head>
 <body>
@@ -188,6 +205,11 @@ if ('serviceWorker' in navigator) {
             <p>Distance from Anchor: <span id="distanceValue">--</span> <span id="distanceUnit">meters</span></p>
             <p>Current Position: <span id="currentLat">--</span>, <span id="currentLon">--</span></p>
             <p>Anchor Position: <span id="anchorLat">--</span>, <span id="anchorLon">--</span></p>
+            <p>Screen Wake Lock: <span id="wakeLockStatus" class="wake-inactive">INACTIVE 🔓</span></p>
+        </div>
+
+        <div id="wakeLockWarning" class="wake-warning" style="display: none;">
+            ⚠️ Your browser does not support Screen Wake Lock. Please keep the screen on manually to ensure the GPS keeps monitoring.
         </div>
     </div>
 
@@ -198,8 +220,12 @@ if ('serviceWorker' in navigator) {
         let anchorRadius = 50;
         let currentUnit = 'meters';
         let isAlarmActive = false;
-        let audioAlarm = new Audio('alarm_sailing_religion.wav');
+        let audioAlarm = new Audio('alarm_sailing_religion.mp3');
         let gpsPermissionGranted = false;
+
+        // ===== Screen Wake Lock =====
+        let wakeLock = null;
+        const wakeLockSupported = ('wakeLock' in navigator);
 
         const setAnchorBtn = document.getElementById('setAnchorBtn');
         const resetBtn = document.getElementById('resetBtn');
@@ -216,6 +242,55 @@ if ('serviceWorker' in navigator) {
         const unitLabel = document.getElementById('unitLabel');
         const distanceUnit = document.getElementById('distanceUnit');
         const restoreInfo = document.getElementById('restoreInfo');
+        const wakeLockStatusSpan = document.getElementById('wakeLockStatus');
+        const wakeLockWarning = document.getElementById('wakeLockWarning');
+
+        // ===== Funciones de Screen Wake Lock =====
+        function updateWakeLockUI(active) {
+            if (active) {
+                wakeLockStatusSpan.textContent = 'ACTIVE 🔒';
+                wakeLockStatusSpan.className = 'wake-active';
+            } else {
+                wakeLockStatusSpan.textContent = 'INACTIVE 🔓';
+                wakeLockStatusSpan.className = 'wake-inactive';
+            }
+        }
+
+        async function requestWakeLock() {
+            // Fallback: navegador sin soporte
+            if (!wakeLockSupported) {
+                wakeLockWarning.style.display = 'block';
+                updateWakeLockUI(false);
+                console.warn('Screen Wake Lock API no soportada en este navegador.');
+                return;
+            }
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                updateWakeLockUI(true);
+                console.log('Screen Wake Lock activado.');
+                // Si el sistema libera el bloqueo (p. ej. pantalla apagada por el SO),
+                // reflejarlo en la interfaz.
+                wakeLock.addEventListener('release', () => {
+                    updateWakeLockUI(false);
+                    console.log('Screen Wake Lock liberado por el sistema.');
+                });
+            } catch (err) {
+                updateWakeLockUI(false);
+                console.error('Error al solicitar Wake Lock:', err.name, err.message);
+            }
+        }
+
+        async function releaseWakeLock() {
+            if (wakeLock) {
+                try {
+                    await wakeLock.release();
+                } catch (e) {
+                    console.warn('Error al liberar Wake Lock:', e);
+                }
+                wakeLock = null;
+            }
+            updateWakeLockUI(false);
+        }
 
         // Funciones para guardar y cargar configuración
         function saveConfig() {
@@ -341,6 +416,8 @@ if ('serviceWorker' in navigator) {
                 if (navigator.vibrate) {
                     navigator.vibrate([1000, 500, 1000, 500, 1000]);
                 }
+                // Mantener la pantalla encendida mientras suena la alarma
+                requestWakeLock();
             }
         }
 
@@ -450,6 +527,8 @@ if ('serviceWorker' in navigator) {
                     alarmStatusSpan.textContent = 'Anchor set. Monitoring...';
                     alarmStatusSpan.className = 'safe-status';
                     saveConfig(); // Guardar la nueva posición
+                    // Mantener la pantalla y el GPS activos mientras se monitorea el fondeo
+                    requestWakeLock();
                     if (!watchId || !gpsPermissionGranted) {
                         startGpsWatch();
                     }
@@ -468,6 +547,7 @@ if ('serviceWorker' in navigator) {
             alarmStatusSpan.textContent = 'Ready to set anchor.';
             alarmStatusSpan.className = 'safe-status';
             silenceAlarm();
+            releaseWakeLock(); // Liberar el bloqueo de pantalla al detener el monitoreo
             clearConfig(); // Limpiar configuración guardada
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
@@ -481,10 +561,17 @@ if ('serviceWorker' in navigator) {
 
         // Manejar visibilidad de la página
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden && gpsPermissionGranted) {
-                // Página visible de nuevo, reiniciar GPS si es necesario
-                if (!watchId && (anchorLat || anchorLon)) {
-                    setTimeout(startGpsWatch, 1000);
+            if (!document.hidden) {
+                // El navegador libera el Wake Lock al ocultar la pestaña/app.
+                // Si seguimos monitoreando un fondeo, volver a solicitarlo.
+                if (anchorLat !== null && anchorLon !== null && wakeLock === null) {
+                    requestWakeLock();
+                }
+                if (gpsPermissionGranted) {
+                    // Página visible de nuevo, reiniciar GPS si es necesario
+                    if (!watchId && (anchorLat || anchorLon)) {
+                        setTimeout(startGpsWatch, 1000);
+                    }
                 }
             }
         });
@@ -494,12 +581,18 @@ if ('serviceWorker' in navigator) {
             // Cargar configuración guardada
             const configLoaded = loadConfig();
             
+            // Mostrar advertencia si el navegador no soporta Wake Lock
+            if (!wakeLockSupported) {
+                wakeLockWarning.style.display = 'block';
+            }
+
             // Iniciar GPS
             startGpsWatch();
             
-            // Si se cargó configuración con ancla, mostrar mensaje
+            // Si se cargó configuración con ancla, mostrar mensaje y mantener pantalla activa
             if (configLoaded && anchorLat && anchorLon) {
                 console.log('Previous anchor position restored');
+                requestWakeLock();
             }
         });
 
