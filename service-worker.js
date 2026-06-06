@@ -5,7 +5,7 @@
 //     instala la nueva caché y avisa al usuario mediante el modal de actualización.
 //     Recuerda actualizar también el CHANGELOG en anchoralarm3.html.
 // ============================================================
-const CACHE_NAME = 'anchor-alarm-sailingreligion-v5';
+const CACHE_NAME = 'sailing-religion-anchor-alarm-v6';
 const urlsToCache = [
   './anchoralarm3.html',
   './manifest.json',
