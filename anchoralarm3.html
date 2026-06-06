@@ -200,6 +200,140 @@ if ('serviceWorker' in navigator) {
             color: #FFA500;
         }
 
+        /* ===== GPS accuracy / status indicators ===== */
+        .acc-good { color: #32CD32; font-weight: bold; }      /* < 20 m  */
+        .acc-medium { color: #FFD700; font-weight: bold; }    /* 20-50 m */
+        .acc-bad { color: #FF4500; font-weight: bold; }       /* > 50 m  */
+        .gps-active { color: #32CD32; font-weight: bold; }
+        .gps-stale { color: #FFA500; font-weight: bold; }
+        .weak-signal {
+            color: #FFA500;
+            font-weight: bold;
+            font-size: 0.85em;
+            display: block;
+            margin-top: 4px;
+        }
+        .threshold-value { color: #FFD700; }
+
+        /* ===== Anchor capture progress panel ===== */
+        .capture-panel {
+            background-color: #00284d;
+            border: 1px solid #ADD8E6;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 18px;
+            font-size: 0.95em;
+            text-align: left;
+        }
+        .capture-panel .capture-title {
+            color: #ADD8E6;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        .progress-track {
+            width: 100%;
+            height: 16px;
+            background-color: #001f3f;
+            border: 1px solid #ADD8E6;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #008CBA, #32CD32);
+            transition: width 0.3s ease;
+        }
+        .capture-stats {
+            font-size: 0.9em;
+            color: #ffffff;
+            margin: 6px 0;
+        }
+        .capture-stats .good-count { color: #32CD32; font-weight: bold; }
+        .capture-stats .reject-count { color: #FF4500; font-weight: bold; }
+        .capture-cancel-btn {
+            background-color: #b22222;
+            font-size: 1em;
+            padding: 8px 18px;
+            margin-top: 8px;
+        }
+        .capture-cancel-btn:hover { background-color: #8b1a1a; }
+        .confidence-result {
+            background-color: #002b1a;
+            border: 1px solid #32CD32;
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 18px;
+            font-size: 1em;
+        }
+        .confidence-result.low {
+            background-color: #4d2600;
+            border-color: #FFA500;
+        }
+
+        /* ===== GPS FAILURE modal (rojo, distinto del DRAG ALERT) ===== */
+        .gps-fail-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background-color: rgba(40, 0, 0, 0.92);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2147483646;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        .gps-fail-modal {
+            background: linear-gradient(160deg, #5a0000 0%, #2b0000 100%);
+            border: 3px solid #FF4500;
+            border-radius: 12px;
+            padding: 28px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 0 0 4px rgba(255, 69, 0, 0.2), 0 10px 50px rgba(0, 0, 0, 0.85);
+            text-align: center;
+        }
+        .gps-fail-modal .fail-icon {
+            font-size: 3em;
+            line-height: 1;
+            margin-bottom: 8px;
+            animation: warnPulse 1.2s ease-in-out infinite;
+        }
+        .gps-fail-modal h2 {
+            color: #FF4500;
+            font-size: 1.6em;
+            margin: 0 0 10px 0;
+        }
+        .gps-fail-modal p {
+            color: #ffd2d2;
+            font-size: 1em;
+            line-height: 1.5;
+            margin: 8px 0;
+        }
+        .gps-fail-modal .fail-emphasis {
+            color: #FFC04d;
+            font-weight: bold;
+        }
+        .gps-fail-modal .ack-btn {
+            background-color: #FF4500;
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 1.2em;
+            padding: 14px 25px;
+            width: 100%;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 14px;
+        }
+        .gps-fail-modal .ack-btn:hover { background-color: #cc3700; }
+
         /* ===== Modal de actualización FORZOSA de la PWA ===== */
         /* Bloquea el scroll y la interacción del fondo cuando la actualización es obligatoria */
         body.update-locked {
@@ -387,15 +521,34 @@ if ('serviceWorker' in navigator) {
             <input type="range" id="anchorRadius" min="20" max="200" value="50">
         </div>
 
+        <div class="control-group">
+            <label for="accuracyThreshold">GPS Accuracy Threshold: <span id="thresholdValue" class="threshold-value">30</span> m</label>
+            <input type="range" id="accuracyThreshold" min="10" max="100" value="30">
+        </div>
+
         <button id="setAnchorBtn">SET ANCHOR</button>
         <button id="resetBtn">RESET</button>
         <button id="silenceBtn">SILENCE ALARM</button>
+
+        <!-- Anchor capture progress panel (Mejora 1) -->
+        <div id="capturePanel" class="capture-panel" style="display: none;">
+            <div class="capture-title">📍 Taking GPS readings <span id="captureProgressText">0/10</span></div>
+            <div class="progress-track"><div id="captureProgressFill" class="progress-fill"></div></div>
+            <div class="capture-stats">Current accuracy: <span id="captureAccuracy">--</span></div>
+            <div class="capture-stats">Good readings: <span id="captureGood" class="good-count">0</span> / Rejected: <span id="captureReject" class="reject-count">0</span></div>
+            <div style="text-align:center;"><button id="cancelCaptureBtn" class="capture-cancel-btn">CANCEL</button></div>
+        </div>
+
+        <!-- Capture result panel (Mejora 1) -->
+        <div id="confidenceResult" class="confidence-result" style="display: none;"></div>
 
         <div class="status-display">
             <p>Status: <span id="alarmStatus" class="safe-status">SAFE ✅</span></p>
             <p>Distance from Anchor: <span id="distanceValue">--</span> <span id="distanceUnit">meters</span></p>
             <p>Current Position: <span id="currentLat">--</span>, <span id="currentLon">--</span></p>
             <p>Anchor Position: <span id="anchorLat">--</span>, <span id="anchorLon">--</span></p>
+            <p>GPS Accuracy: <span id="gpsAccuracy" class="acc-medium">-- m</span><span id="weakSignal" class="weak-signal" style="display:none;">⚠️ Weak GPS signal — reading ignored</span></p>
+            <p>GPS: <span id="gpsStatus" class="gps-stale">Waiting for signal…</span></p>
             <p>Screen Wake Lock: <span id="wakeLockStatus" class="wake-inactive">INACTIVE 🔓</span></p>
         </div>
 
@@ -413,6 +566,23 @@ if ('serviceWorker' in navigator) {
         let isAlarmActive = false;
         let audioAlarm = new Audio('alarm_sailing_religion.mp3');
         let gpsPermissionGranted = false;
+
+        // ===== GPS precision filter (Mejora 2) =====
+        let accuracyThreshold = 30; // metros; configurable por el usuario (10-100)
+
+        // ===== Smart anchor capture (Mejora 1) =====
+        let isCapturing = false;
+        let captureCancelled = false;
+
+        // ===== GPS watchdog (Mejora 3) =====
+        let lastGPSUpdate = Date.now();
+        let watchdogTimer = null;     // comprueba cada 30 s si el GPS sigue vivo
+        let gpsAgeTimer = null;       // refresca el indicador "Last update: X sec ago"
+        let gpsFailureActive = false; // evita modales duplicados de GPS FAILURE
+
+        // ===== Sustained alarm (Extra) =====
+        let outOfRadiusCount = 0;     // lecturas SEGUIDAS fuera del radio
+        const SUSTAINED_THRESHOLD = 3; // nº de lecturas seguidas antes de sonar
 
         // ===== Screen Wake Lock =====
         let wakeLock = null;
@@ -434,6 +604,20 @@ if ('serviceWorker' in navigator) {
         const distanceUnit = document.getElementById('distanceUnit');
         const wakeLockStatusSpan = document.getElementById('wakeLockStatus');
         const wakeLockWarning = document.getElementById('wakeLockWarning');
+        // Nuevas referencias para las mejoras GPS
+        const accuracyThresholdSlider = document.getElementById('accuracyThreshold');
+        const thresholdValueSpan = document.getElementById('thresholdValue');
+        const gpsAccuracySpan = document.getElementById('gpsAccuracy');
+        const weakSignalSpan = document.getElementById('weakSignal');
+        const gpsStatusSpan = document.getElementById('gpsStatus');
+        const capturePanel = document.getElementById('capturePanel');
+        const captureProgressText = document.getElementById('captureProgressText');
+        const captureProgressFill = document.getElementById('captureProgressFill');
+        const captureAccuracy = document.getElementById('captureAccuracy');
+        const captureGood = document.getElementById('captureGood');
+        const captureReject = document.getElementById('captureReject');
+        const cancelCaptureBtn = document.getElementById('cancelCaptureBtn');
+        const confidenceResult = document.getElementById('confidenceResult');
 
         // ===== Funciones de Screen Wake Lock =====
         function updateWakeLockUI(active) {
@@ -492,13 +676,12 @@ if ('serviceWorker' in navigator) {
         //    El modal de actualización OBLIGATORIA se mostrará automáticamente a
         //    los usuarios existentes y bloqueará el uso de la app hasta actualizar.
         // ------------------------------------------------------------
-        const APP_VERSION = 'v4';
+        const APP_VERSION = 'v5';
         const CHANGELOG = [
-            '🔒 Safety: the anchor position is no longer auto-restored on startup',
-            '⚓ The app always starts clean — you must press SET ANCHOR manually',
-            '✨ Wake Lock - keeps GPS active 24/7 (even with the screen off)',
-            '🎵 Ultra-optimized audio (99.5% lighter)',
-            '⚡ Better offline reliability'
+            '🎯 Smart anchor averaging (10 readings)',
+            '🔍 GPS accuracy filter (configurable)',
+            '🔔 GPS watchdog (2-min timeout)',
+            '🛡️ Sustained alarm (3 consecutive readings)'
         ];
 
         let modalActualizacionVisible = false;
@@ -609,7 +792,8 @@ if ('serviceWorker' in navigator) {
         function savePreferences() {
             const prefs = {
                 anchorRadius: anchorRadius,
-                currentUnit: currentUnit
+                currentUnit: currentUnit,
+                accuracyThreshold: accuracyThreshold
             };
             localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
         }
@@ -621,12 +805,16 @@ if ('serviceWorker' in navigator) {
                     const prefs = JSON.parse(saved);
                     anchorRadius = prefs.anchorRadius || 50;
                     currentUnit = prefs.currentUnit || 'meters';
+                    accuracyThreshold = prefs.accuracyThreshold || 30;
                     unitSelector.value = currentUnit;
                     updateUnits();
                 }
             } catch (e) {
                 console.warn('Error loading saved preferences:', e);
             }
+            // Reflejar el umbral de precisión en el slider y la etiqueta
+            accuracyThresholdSlider.value = accuracyThreshold;
+            thresholdValueSpan.textContent = accuracyThreshold;
         }
 
         // Funciones de conversión
@@ -676,6 +864,37 @@ if ('serviceWorker' in navigator) {
             savePreferences(); // Save user preferences (radius + unit)
         });
 
+        // Event listener para el slider del umbral de precisión GPS (Mejora 2)
+        accuracyThresholdSlider.addEventListener('input', () => {
+            accuracyThreshold = parseInt(accuracyThresholdSlider.value);
+            thresholdValueSpan.textContent = accuracyThreshold;
+            savePreferences();
+        });
+
+        // ===== Helpers de precisión GPS (Mejora 2) =====
+        // Pinta el indicador "GPS Accuracy: ±X m" con color según calidad.
+        function updateAccuracyDisplay(accuracy) {
+            const acc = Math.round(accuracy);
+            gpsAccuracySpan.textContent = '±' + acc + ' m';
+            if (acc < 20) {
+                gpsAccuracySpan.className = 'acc-good';
+            } else if (acc <= 50) {
+                gpsAccuracySpan.className = 'acc-medium';
+            } else {
+                gpsAccuracySpan.className = 'acc-bad';
+            }
+        }
+
+        let weakSignalTimer = null;
+        // Muestra "Weak GPS signal" durante 2 s cuando se descarta una lectura.
+        function showWeakSignal() {
+            weakSignalSpan.style.display = 'block';
+            if (weakSignalTimer) clearTimeout(weakSignalTimer);
+            weakSignalTimer = setTimeout(() => {
+                weakSignalSpan.style.display = 'none';
+            }, 2000);
+        }
+
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371e3;
             const φ1 = lat1 * Math.PI / 180;
@@ -709,6 +928,7 @@ if ('serviceWorker' in navigator) {
 
         function silenceAlarm() {
             isAlarmActive = false;
+            outOfRadiusCount = 0; // reiniciar el contador de alarma sostenida
             if (audioAlarm) {
                 audioAlarm.pause();
                 audioAlarm.currentTime = 0;
@@ -719,26 +939,57 @@ if ('serviceWorker' in navigator) {
         }
 
         function handlePosition(position) {
+            // El watchdog (Mejora 3) considera "vivo" al GPS en cuanto el chip
+            // entrega CUALQUIER lectura, aunque luego se descarte por precisión.
+            lastGPSUpdate = Date.now();
+            // Si veníamos de un fallo de GPS, recuperar el estado normal.
+            if (gpsFailureActive) {
+                clearGpsFailure();
+            }
+
+            const accuracy = position.coords.accuracy; // metros (radio 68%)
+            updateAccuracyDisplay(accuracy); // Mejora 2: mostrar precisión SIEMPRE
+
+            // Mejora 2: filtro de precisión — descartar lecturas peores al umbral.
+            if (accuracy > accuracyThreshold) {
+                showWeakSignal();
+                console.warn('Lectura GPS descartada por baja precisión: ±' +
+                    Math.round(accuracy) + ' m (umbral ' + accuracyThreshold + ' m)');
+                return; // no actualizar posición, distancia ni alarma
+            }
+
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
             currentLatSpan.textContent = lat.toFixed(6);
             currentLonSpan.textContent = lon.toFixed(6);
-            
+
             if (anchorLat !== null && anchorLon !== null) {
                 const distance = calculateDistance(anchorLat, anchorLon, lat, lon);
-                
+
                 const displayDistance = currentUnit === 'feet' ? metersToFeet(distance) : distance;
                 distanceValueSpan.textContent = displayDistance.toFixed(1);
-                
+
                 if (distance > anchorRadius) {
-                    activateAlarm();
-                } else {
-                    if (alarmStatusSpan.classList.contains('alarm-status')) {
-                        alarmStatusSpan.textContent = 'SAFE ✅';
+                    // Extra: alarma SOSTENIDA — exigir varias lecturas seguidas fuera
+                    // del radio antes de disparar, para evitar falsas alarmas por
+                    // saltos aislados del GPS.
+                    outOfRadiusCount++;
+                    if (outOfRadiusCount >= SUSTAINED_THRESHOLD) {
+                        activateAlarm();
+                    } else if (!isAlarmActive) {
+                        alarmStatusSpan.textContent = 'Checking drift… (' +
+                            outOfRadiusCount + '/' + SUSTAINED_THRESHOLD + ')';
                         alarmStatusSpan.className = 'safe-status';
                     }
-                    if (isAlarmActive && distance <= anchorRadius) {
+                } else {
+                    // Dentro del radio: reiniciar el contador y volver a SAFE.
+                    outOfRadiusCount = 0;
+                    if (isAlarmActive) {
                         silenceAlarm();
+                    }
+                    if (!alarmStatusSpan.textContent.startsWith('GPS')) {
+                        alarmStatusSpan.textContent = 'SAFE ✅';
+                        alarmStatusSpan.className = 'safe-status';
                     }
                 }
             } else {
@@ -777,6 +1028,119 @@ if ('serviceWorker' in navigator) {
             }
         }
 
+        // ============================================================
+        //  WATCHDOG DE GPS (Mejora 3)
+        // ============================================================
+        const GPS_TIMEOUT_MS = 120000; // 2 minutos sin señal => alarma
+        const WATCHDOG_INTERVAL_MS = 30000; // comprobar cada 30 s
+
+        // Refresca el indicador "GPS: Active ✅ (Last update: X sec ago)".
+        function updateGpsAgeIndicator() {
+            if (gpsFailureActive) return; // el modal ya informa del fallo
+            const ageSec = Math.floor((Date.now() - lastGPSUpdate) / 1000);
+            if (ageSec < 60) {
+                gpsStatusSpan.textContent = 'Active ✅ (Last update: ' + ageSec + ' sec ago)';
+            } else {
+                const ageMin = Math.floor(ageSec / 60);
+                gpsStatusSpan.textContent = 'Active ✅ (Last update: ' + ageMin + ' min ago)';
+            }
+            gpsStatusSpan.className = (ageSec > 30) ? 'gps-stale' : 'gps-active';
+        }
+
+        // Arranca el watchdog y el refresco del indicador (1 vez/seg).
+        function startWatchdog() {
+            lastGPSUpdate = Date.now();
+            if (watchdogTimer) clearInterval(watchdogTimer);
+            if (gpsAgeTimer) clearInterval(gpsAgeTimer);
+            watchdogTimer = setInterval(checkGpsAlive, WATCHDOG_INTERVAL_MS);
+            gpsAgeTimer = setInterval(updateGpsAgeIndicator, 1000);
+            updateGpsAgeIndicator();
+        }
+
+        // Detiene el watchdog (al hacer RESET).
+        function stopWatchdog() {
+            if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
+            if (gpsAgeTimer) { clearInterval(gpsAgeTimer); gpsAgeTimer = null; }
+            gpsStatusSpan.textContent = 'Waiting for signal…';
+            gpsStatusSpan.className = 'gps-stale';
+        }
+
+        // Comprueba si el GPS sigue vivo. Solo actúa con el ancla fijada.
+        function checkGpsAlive() {
+            if (anchorLat === null || anchorLon === null) return; // solo con ancla
+            const age = Date.now() - lastGPSUpdate;
+            if (age > GPS_TIMEOUT_MS && !gpsFailureActive) {
+                triggerGpsFailure(age);
+            }
+        }
+
+        // Dispara la alarma de FALLO DE GPS (distinta del DRAG ALERT).
+        function triggerGpsFailure(ageMs) {
+            gpsFailureActive = true;
+            const ageMin = Math.max(1, Math.floor(ageMs / 60000));
+
+            // Estado en pantalla (rojo, distinto del DRAG ALERT).
+            gpsStatusSpan.textContent = 'GPS FAILURE ⚠️';
+            gpsStatusSpan.className = 'acc-bad';
+            alarmStatusSpan.textContent = 'GPS FAILURE ⚠️';
+            alarmStatusSpan.className = 'alarm-status';
+
+            // Sonido + vibración (mismo audio que el DRAG ALERT).
+            isAlarmActive = true;
+            if (audioAlarm) {
+                audioAlarm.loop = true;
+                audioAlarm.play().catch(e => console.error("Audio error:", e));
+            }
+            if (navigator.vibrate) {
+                navigator.vibrate([1000, 500, 1000, 500, 1000]);
+            }
+            requestWakeLock();
+
+            showGpsFailureModal(ageMin);
+        }
+
+        // Construye y muestra el modal ROJO de GPS FAILURE con botón Acknowledge.
+        function showGpsFailureModal(ageMin) {
+            if (document.getElementById('gpsFailOverlay')) return; // evitar duplicados
+            const overlay = document.createElement('div');
+            overlay.className = 'gps-fail-overlay';
+            overlay.id = 'gpsFailOverlay';
+            overlay.innerHTML =
+                '<div class="gps-fail-modal" role="alertdialog" aria-modal="true">' +
+                    '<div class="fail-icon" aria-hidden="true">⚠️</div>' +
+                    '<h2>GPS FAILURE</h2>' +
+                    '<p>GPS signal lost! Last update: <span class="fail-emphasis">' + ageMin + ' min ago</span>.</p>' +
+                    '<p class="fail-emphasis">Your boat is NOT being monitored.</p>' +
+                    '<button class="ack-btn" id="gpsAckBtn">Acknowledge</button>' +
+                '</div>';
+            document.body.appendChild(overlay);
+            document.getElementById('gpsAckBtn').addEventListener('click', acknowledgeGpsFailure);
+        }
+
+        // El usuario reconoce el fallo: silencia la alarma y cierra el modal.
+        function acknowledgeGpsFailure() {
+            silenceAlarm();
+            const overlay = document.getElementById('gpsFailOverlay');
+            if (overlay) overlay.remove();
+            // Se mantiene gpsFailureActive=true hasta que vuelva una lectura real,
+            // momento en que clearGpsFailure() restaura el estado normal.
+            gpsStatusSpan.textContent = 'GPS FAILURE ⚠️ (acknowledged)';
+            gpsStatusSpan.className = 'acc-bad';
+        }
+
+        // Restaura el estado normal cuando el GPS vuelve a entregar lecturas.
+        function clearGpsFailure() {
+            gpsFailureActive = false;
+            const overlay = document.getElementById('gpsFailOverlay');
+            if (overlay) overlay.remove();
+            if (isAlarmActive) silenceAlarm();
+            if (alarmStatusSpan.textContent.startsWith('GPS FAILURE')) {
+                alarmStatusSpan.textContent = 'SAFE ✅';
+                alarmStatusSpan.className = 'safe-status';
+            }
+            updateGpsAgeIndicator();
+        }
+
         function startGpsWatch() {
             if (navigator.geolocation) {
                 const options = {
@@ -792,6 +1156,7 @@ if ('serviceWorker' in navigator) {
                 watchId = navigator.geolocation.watchPosition(
                     (position) => {
                         gpsPermissionGranted = true;
+                        lastGPSUpdate = Date.now(); // Mejora 3: marca de tiempo del último fix
                         handlePosition(position);
                     }, 
                     handleError, 
@@ -802,28 +1167,204 @@ if ('serviceWorker' in navigator) {
             }
         }
 
-        setAnchorBtn.addEventListener('click', () => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition((position) => {
-                    anchorLat = position.coords.latitude;
-                    anchorLon = position.coords.longitude;
-                    anchorLatSpan.textContent = anchorLat.toFixed(6);
-                    anchorLonSpan.textContent = anchorLon.toFixed(6);
-                    alert(`Anchor set at: ${anchorLat.toFixed(6)}, ${anchorLon.toFixed(6)}`);
-                    alarmStatusSpan.textContent = 'Anchor set. Monitoring...';
-                    alarmStatusSpan.className = 'safe-status';
-                    // Keep the screen and GPS active while monitoring the anchor
-                    requestWakeLock();
-                    if (!watchId || !gpsPermissionGranted) {
-                        startGpsWatch();
-                    }
-                }, handleError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-            } else {
-                alert("Your browser does not support geolocation.");
+        // ===== IMPROVEMENT 1: Smart anchor averaging (10 readings over 10 s) =====
+        const CAPTURE_COUNT = 10;          // number of GPS readings to take
+        const CAPTURE_INTERVAL_MS = 1000;  // one reading per second
+        const SPREAD_THRESHOLD_M = 10;     // <10 m spread -> simple average, else centroid
+        let captureTimer = null;
+        let captureReadings = [];          // accepted readings {lat, lon, accuracy}
+        let captureTaken = 0;              // total attempts made
+        let captureGoodCount = 0;
+        let captureRejectCount = 0;
+
+        // Convert a small lat/lon delta to metres (good enough for dispersion at anchor scale)
+        function metresBetween(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const meanLat = (lat1 + lat2) / 2 * Math.PI / 180;
+            const x = dLon * Math.cos(meanLat);
+            return Math.sqrt(dLat * dLat + x * x) * R;
+        }
+
+        function resetCaptureUI() {
+            captureProgressText.textContent = `0/${CAPTURE_COUNT}`;
+            captureProgressFill.style.width = '0%';
+            captureAccuracy.textContent = '±-- m';
+            captureGood.textContent = '0';
+            captureReject.textContent = '0';
+        }
+
+        function finishCapture() {
+            if (captureTimer) { clearInterval(captureTimer); captureTimer = null; }
+            isCapturing = false;
+            capturePanel.style.display = 'none';
+            setAnchorBtn.disabled = false;
+        }
+
+        function evaluateCapture() {
+            finishCapture();
+
+            // No usable readings -> do NOT set the anchor
+            if (captureReadings.length === 0) {
+                confidenceResult.className = 'confidence-result low';
+                confidenceResult.style.display = 'block';
+                confidenceResult.innerHTML =
+                    '<strong>No reliable GPS — try again</strong><br>' +
+                    'All readings were weaker than the accuracy threshold.';
+                alarmStatusSpan.textContent = 'Anchor NOT set — weak GPS.';
+                alarmStatusSpan.className = 'alarm-status';
+                return;
             }
+
+            // Mean position (simple average)
+            let sumLat = 0, sumLon = 0, sumAcc = 0;
+            captureReadings.forEach(r => { sumLat += r.lat; sumLon += r.lon; sumAcc += r.accuracy; });
+            const meanLat = sumLat / captureReadings.length;
+            const meanLon = sumLon / captureReadings.length;
+            const avgAccuracy = sumAcc / captureReadings.length;
+
+            // Dispersion: standard deviation of distance to the mean position (metres)
+            let sqSum = 0;
+            captureReadings.forEach(r => {
+                const d = metresBetween(meanLat, meanLon, r.lat, r.lon);
+                sqSum += d * d;
+            });
+            const spread = Math.sqrt(sqSum / captureReadings.length);
+
+            // Choose averaging strategy
+            if (spread < SPREAD_THRESHOLD_M) {
+                // Tight cluster -> simple average
+                anchorLat = meanLat;
+                anchorLon = meanLon;
+            } else {
+                // Scattered -> geometric centre (centroid of accepted points)
+                anchorLat = meanLat; // centroid of equal-weight points equals the mean
+                anchorLon = meanLon;
+            }
+
+            anchorLatSpan.textContent = anchorLat.toFixed(6);
+            anchorLonSpan.textContent = anchorLon.toFixed(6);
+
+            // Confidence rating based on average accuracy
+            let confLabel, confStars, confClass;
+            if (avgAccuracy < 10) {
+                confLabel = 'HIGH'; confStars = '⭐⭐⭐'; confClass = 'confidence-result';
+            } else if (avgAccuracy < 25) {
+                confLabel = 'GOOD'; confStars = '⭐⭐'; confClass = 'confidence-result';
+            } else {
+                confLabel = 'LOW'; confStars = '⭐'; confClass = 'confidence-result low';
+            }
+            const method = spread < SPREAD_THRESHOLD_M ? 'simple average' : 'geometric centre';
+
+            confidenceResult.className = confClass;
+            confidenceResult.style.display = 'block';
+            confidenceResult.innerHTML =
+                '<strong>Anchor set ✅</strong><br>' +
+                `Confidence: ${confLabel} ${confStars}<br>` +
+                `Based on ${captureReadings.length} reading${captureReadings.length === 1 ? '' : 's'} (${method})<br>` +
+                `Avg accuracy ±${avgAccuracy.toFixed(1)} m · spread ±${spread.toFixed(1)} m`;
+
+            alarmStatusSpan.textContent = 'Anchor set. Monitoring...';
+            alarmStatusSpan.className = 'safe-status';
+
+            // Keep the screen and GPS active while monitoring the anchor
+            requestWakeLock();
+            if (!watchId || !gpsPermissionGranted) {
+                startGpsWatch();
+            }
+            outOfRadiusCount = 0;
+            lastGPSUpdate = Date.now();
+            startWatchdog();
+        }
+
+        function takeCaptureReading() {
+            if (captureCancelled) return;
+            navigator.geolocation.getCurrentPosition((position) => {
+                if (captureCancelled) return;
+                captureTaken++;
+                const acc = position.coords.accuracy;
+                captureAccuracy.textContent = `±${acc.toFixed(1)} m`;
+                if (acc <= accuracyThreshold) {
+                    captureGoodCount++;
+                    captureReadings.push({
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude,
+                        accuracy: acc
+                    });
+                } else {
+                    captureRejectCount++;
+                }
+                captureGood.textContent = String(captureGoodCount);
+                captureReject.textContent = String(captureRejectCount);
+                const pct = Math.round((captureTaken / CAPTURE_COUNT) * 100);
+                captureProgressText.textContent = `${captureTaken}/${CAPTURE_COUNT}`;
+                captureProgressFill.style.width = `${pct}%`;
+                if (captureTaken >= CAPTURE_COUNT) {
+                    evaluateCapture();
+                }
+            }, (err) => {
+                // Count a failed read as a rejected attempt and keep going
+                if (captureCancelled) return;
+                captureTaken++;
+                captureRejectCount++;
+                captureReject.textContent = String(captureRejectCount);
+                const pct = Math.round((captureTaken / CAPTURE_COUNT) * 100);
+                captureProgressText.textContent = `${captureTaken}/${CAPTURE_COUNT}`;
+                captureProgressFill.style.width = `${pct}%`;
+                if (captureTaken >= CAPTURE_COUNT) {
+                    evaluateCapture();
+                }
+            }, { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
+        }
+
+        function captureAnchorPosition() {
+            if (!navigator.geolocation) {
+                alert("Your browser does not support geolocation.");
+                return;
+            }
+            if (isCapturing) return;
+
+            // Reset state
+            isCapturing = true;
+            captureCancelled = false;
+            captureReadings = [];
+            captureTaken = 0;
+            captureGoodCount = 0;
+            captureRejectCount = 0;
+
+            confidenceResult.style.display = 'none';
+            resetCaptureUI();
+            capturePanel.style.display = 'block';
+            setAnchorBtn.disabled = true;
+            alarmStatusSpan.textContent = 'Acquiring GPS fix...';
+            alarmStatusSpan.className = 'safe-status';
+
+            // First reading immediately, then one per second
+            takeCaptureReading();
+            captureTimer = setInterval(() => {
+                if (captureCancelled || captureTaken >= CAPTURE_COUNT) {
+                    if (captureTimer) { clearInterval(captureTimer); captureTimer = null; }
+                    return;
+                }
+                takeCaptureReading();
+            }, CAPTURE_INTERVAL_MS);
+        }
+
+        setAnchorBtn.addEventListener('click', captureAnchorPosition);
+
+        cancelCaptureBtn.addEventListener('click', () => {
+            captureCancelled = true;
+            finishCapture();
+            alarmStatusSpan.textContent = 'Capture cancelled.';
+            alarmStatusSpan.className = 'safe-status';
         });
 
         resetBtn.addEventListener('click', () => {
+            // Cancel any in-progress capture
+            captureCancelled = true;
+            finishCapture();
+
             anchorLat = null;
             anchorLon = null;
             anchorLatSpan.textContent = '--';
@@ -833,11 +1374,23 @@ if ('serviceWorker' in navigator) {
             alarmStatusSpan.className = 'safe-status';
             silenceAlarm();
             releaseWakeLock(); // Release the screen lock when monitoring stops
+
+            // Reset improvement state
+            stopWatchdog();
+            gpsFailureActive = false;
+            outOfRadiusCount = 0;
+            confidenceResult.style.display = 'none';
+            gpsAccuracySpan.textContent = '-- m';
+            gpsAccuracySpan.className = '';
+            // Remove the GPS-failure modal if it is showing
+            const failOverlay = document.getElementById('gpsFailOverlay');
+            if (failOverlay) failOverlay.remove();
+
             if (watchId) {
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
             }
-            // Reiniciar el GPS watch
+            // Restart the GPS watch
             setTimeout(startGpsWatch, 1000);
         });
 
