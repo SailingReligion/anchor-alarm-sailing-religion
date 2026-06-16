@@ -5,7 +5,7 @@
 //     instala la nueva caché y avisa al usuario mediante el modal de actualización.
 //     Recuerda actualizar también APP_VERSION y el CHANGELOG en anchoralarm3.html.
 // ============================================================
-const CACHE_NAME = 'sailing-religion-anchor-alarm-v7';
+const CACHE_NAME = 'sailing-religion-anchor-alarm-v8';
 
 // IMPORTANTE: solo se listan archivos que EXISTEN en el repositorio. La app usa
 // 'logosr.png' como icono (declarado en manifest.json); NO usa archivos icon-*.png.

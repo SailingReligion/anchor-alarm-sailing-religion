@@ -571,6 +571,60 @@ if ('serviceWorker' in navigator) {
         .modal .close-modal:hover {
             color: #000;
         }
+        /* ===== v8 Session Restore Modal ===== */
+        #sessionRestoreModal .modal-content {
+            max-width: 420px;
+            text-align: center;
+            animation: sessionSlideDown 0.3s ease;
+        }
+        @keyframes sessionSlideDown {
+            from { transform: translateY(-40px); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
+        }
+        #sessionRestoreModal h2 {
+            text-align: center;
+            padding-right: 0;
+        }
+        .session-info {
+            background: #f0f4f8;
+            border: 1px solid #d6e0ea;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 16px 0;
+            text-align: left;
+        }
+        .session-info p { margin: 6px 0; color: #1a1a1a; }
+        .session-info .monitoring { color: #2e7d32; font-weight: bold; }
+        .session-warning {
+            color: #b35900;
+            background: #fff8e1;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin: 14px 0;
+            font-size: 0.95em;
+        }
+        .session-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .session-buttons button {
+            flex: 1;
+            padding: 14px 12px;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: bold;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        .btn-restore { background: #4CAF50; }
+        .btn-restore:hover { background: #43a047; }
+        .btn-fresh { background: #f44336; }
+        .btn-fresh:hover { background: #e53935; }
+        @media (max-width: 480px) {
+            .session-buttons { flex-direction: column; }
+        }
         .modal h2 {
             color: #003366;
             margin-top: 0;
@@ -718,6 +772,26 @@ if ('serviceWorker' in navigator) {
 
         <div id="wakeLockWarning" class="wake-warning" style="display: none;">
             ⚠️ Your browser does not support Screen Wake Lock. Please keep the screen on manually to ensure the GPS keeps monitoring.
+        </div>
+    </div>
+
+    <!-- ===== v8 Session Restore Modal ===== -->
+    <div id="sessionRestoreModal" class="modal">
+        <div class="modal-content">
+            <h2>⚓ Active Alarm Detected</h2>
+            <div class="session-info">
+                <p><strong>Set:</strong> <span id="sessionTime"></span></p>
+                <p><strong>Radius:</strong> <span id="sessionRadius"></span></p>
+                <p><strong>Position:</strong> <span id="sessionPosition"></span></p>
+                <p><strong>Status:</strong> <span class="monitoring">MONITORING</span></p>
+            </div>
+            <p class="session-warning">
+                ⚠️ A previous anchor watch session was found. Would you like to restore it or start fresh?
+            </p>
+            <div class="session-buttons">
+                <button class="btn-restore" onclick="restoreSession()">✅ Restore Alarm</button>
+                <button class="btn-fresh" onclick="startFresh()">🔄 Start Fresh</button>
+            </div>
         </div>
     </div>
 
@@ -965,13 +1039,13 @@ if ('serviceWorker' in navigator) {
         //    El modal de actualización OBLIGATORIA se mostrará automáticamente a
         //    los usuarios existentes y bloqueará el uso de la app hasta actualizar.
         // ------------------------------------------------------------
-        const APP_VERSION = 'v7';
+        const APP_VERSION = 'v8';
         const CHANGELOG = [
-            '🔒 Fixed critical offline loading issue',
-            '📴 App now works 100% without internet',
-            '⚙️ Improved Service Worker caching (fault-tolerant)',
-            '🧭 Added navigation fallback (app-shell)',
-            '⚡ Immediate activation after install'
+            '🔒 Active anchor watch is now saved automatically',
+            '🔄 Recover your alarm after an accidental refresh',
+            '⚓ Session restore confirmation (Restore or Start Fresh)',
+            '⏱️ Saved sessions expire after 12 hours for safety',
+            '📴 (v7) Works 100% offline with robust caching'
         ];
 
         let modalActualizacionVisible = false;
@@ -1107,6 +1181,155 @@ if ('serviceWorker' in navigator) {
             thresholdValueSpan.textContent = accuracyThreshold;
         }
 
+        // ============================================================
+        //  v8 — SESSION SAFETY: guardar/restaurar la sesión de fondeo
+        //  Evita perder la alarma activa por un refresh accidental. La sesión
+        //  se guarda mientras hay un ancla fijada (monitoreo activo) y caduca
+        //  a las 12 horas. Al cargar, si hay sesión válida, se pide confirmación
+        //  antes de restaurar (nunca se restaura automáticamente, por seguridad).
+        // ============================================================
+        const SESSION_EXPIRY_HOURS = 12;
+        const SESSION_KEY = 'anchorAlarmActiveSession';
+
+        // Guarda la sesión activa SOLO si hay un ancla fijada (monitoreo activo).
+        function saveActiveSession() {
+            if (anchorLat === null || anchorLon === null) return;
+            const session = {
+                anchorLat: anchorLat,
+                anchorLon: anchorLon,
+                anchorRadius: anchorRadius,        // siempre en metros (valor canónico)
+                accuracyThreshold: accuracyThreshold,
+                currentUnit: currentUnit,
+                timestamp: Date.now(),
+                isActive: true                     // alarma/monitoreo en curso
+            };
+            try {
+                localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+                console.log('Active session saved:', session);
+            } catch (e) {
+                console.warn('Could not save session:', e);
+            }
+        }
+
+        // Carga la sesión si existe y NO ha caducado (>12 h). Si caducó, la limpia.
+        function loadActiveSession() {
+            const sessionData = localStorage.getItem(SESSION_KEY);
+            if (!sessionData) return null;
+            try {
+                const session = JSON.parse(sessionData);
+                const ageHours = (Date.now() - session.timestamp) / (1000 * 60 * 60);
+                if (ageHours > SESSION_EXPIRY_HOURS) {
+                    console.log('Session expired (age:', ageHours.toFixed(1), 'hours)');
+                    clearActiveSession();
+                    return null;
+                }
+                return session;
+            } catch (e) {
+                console.error('Error loading session:', e);
+                clearActiveSession();
+                return null;
+            }
+        }
+
+        // Elimina la sesión guardada.
+        function clearActiveSession() {
+            localStorage.removeItem(SESSION_KEY);
+            console.log('Active session cleared');
+        }
+
+        // Al cargar la página: si hay sesión válida y activa, mostrar el modal.
+        function checkForActiveSession() {
+            const session = loadActiveSession();
+            if (session && session.isActive &&
+                session.anchorLat != null && session.anchorLon != null) {
+                showSessionRestoreModal(session);
+            }
+        }
+
+        // Rellena y muestra el modal de restauración con los detalles de la sesión.
+        function showSessionRestoreModal(session) {
+            const modal = document.getElementById('sessionRestoreModal');
+            if (!modal) return;
+
+            // Tiempo transcurrido desde que se fijó.
+            const elapsed = Date.now() - session.timestamp;
+            const minutes = Math.floor(elapsed / 60000);
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            const timeText = hours > 0 ? (hours + 'h ' + mins + 'm ago') : (mins + 'm ago');
+
+            // Radio mostrado en la unidad de la sesión (el valor guardado es en metros).
+            let radiusText;
+            if (session.currentUnit === 'feet') {
+                radiusText = Math.round(metersToFeet(session.anchorRadius)) + ' ft';
+            } else {
+                radiusText = Math.round(session.anchorRadius) + ' m';
+            }
+
+            document.getElementById('sessionTime').textContent = timeText;
+            document.getElementById('sessionRadius').textContent = radiusText;
+            document.getElementById('sessionPosition').textContent =
+                session.anchorLat.toFixed(6) + ', ' + session.anchorLon.toFixed(6);
+
+            modal.style.display = 'block';
+        }
+
+        // Restaura la sesión: recupera el ancla y reanuda el monitoreo.
+        function restoreSession() {
+            const session = loadActiveSession();
+            const modal = document.getElementById('sessionRestoreModal');
+            if (!session) {
+                if (modal) modal.style.display = 'none';
+                alert('Previous session expired or invalid. Starting fresh.');
+                return;
+            }
+
+            // Restaurar estado del ancla y preferencias.
+            anchorLat = session.anchorLat;
+            anchorLon = session.anchorLon;
+            anchorRadius = session.anchorRadius;
+            currentUnit = session.currentUnit || 'meters';
+            if (typeof session.accuracyThreshold === 'number') {
+                accuracyThreshold = session.accuracyThreshold;
+                accuracyThresholdSlider.value = accuracyThreshold;
+                thresholdValueSpan.textContent = accuracyThreshold;
+            }
+
+            // Reflejar unidad + radio en la interfaz (updateUnits lee unitSelector.value).
+            unitSelector.value = currentUnit;
+            updateUnits();
+
+            // Mostrar coordenadas del ancla restaurada.
+            anchorLatSpan.textContent = anchorLat.toFixed(6);
+            anchorLonSpan.textContent = anchorLon.toFixed(6);
+
+            // Cerrar modal.
+            if (modal) modal.style.display = 'none';
+
+            // Reanudar monitoreo (igual que al final de evaluateCapture).
+            alarmStatusSpan.textContent = 'Anchor restored. Monitoring...';
+            alarmStatusSpan.className = 'safe-status';
+            requestWakeLock();
+            if (!watchId || !gpsPermissionGranted) {
+                startGpsWatch();
+            }
+            outOfRadiusCount = 0;
+            lastGPSUpdate = Date.now();
+            startWatchdog();
+
+            // Re-guardar con timestamp fresco.
+            saveActiveSession();
+            console.log('Session restored successfully');
+        }
+
+        // Empezar de cero: descartar la sesión previa y cerrar el modal.
+        function startFresh() {
+            clearActiveSession();
+            const modal = document.getElementById('sessionRestoreModal');
+            if (modal) modal.style.display = 'none';
+            console.log('Starting fresh - previous session discarded');
+        }
+
         // Funciones de conversión
         function metersToFeet(meters) {
             return meters * 3.28084;
@@ -1135,6 +1358,8 @@ if ('serviceWorker' in navigator) {
                 radiusValueSpan.textContent = anchorRadius;
             }
             savePreferences(); // Save user preferences (radius + unit)
+            // v8 — Si hay un fondeo activo, actualizar la sesión guardada.
+            if (anchorLat !== null && anchorLon !== null) saveActiveSession();
         }
 
         // Event listener para el selector de unidades
@@ -1152,6 +1377,8 @@ if ('serviceWorker' in navigator) {
                 radiusValueSpan.textContent = sliderValue;
             }
             savePreferences(); // Save user preferences (radius + unit)
+            // v8 — Si hay un fondeo activo, actualizar la sesión guardada.
+            if (anchorLat !== null && anchorLon !== null) saveActiveSession();
         });
 
         // Event listener para el slider del umbral de precisión GPS (Mejora 2)
@@ -1159,6 +1386,8 @@ if ('serviceWorker' in navigator) {
             accuracyThreshold = parseInt(accuracyThresholdSlider.value);
             thresholdValueSpan.textContent = accuracyThreshold;
             savePreferences();
+            // v8 — Si hay un fondeo activo, actualizar la sesión guardada.
+            if (anchorLat !== null && anchorLon !== null) saveActiveSession();
         });
 
         // ===== Helpers de precisión GPS (Mejora 2) =====
@@ -1213,6 +1442,8 @@ if ('serviceWorker' in navigator) {
                 }
                 // Mantener la pantalla encendida mientras suena la alarma
                 requestWakeLock();
+                // v8 — Actualizar la sesión guardada con el estado de alarma activa.
+                saveActiveSession();
             }
         }
 
@@ -1566,6 +1797,9 @@ if ('serviceWorker' in navigator) {
             outOfRadiusCount = 0;
             lastGPSUpdate = Date.now();
             startWatchdog();
+
+            // v8 — Guardar la sesión activa para poder restaurarla tras un refresh.
+            saveActiveSession();
         }
 
         function takeCaptureReading() {
@@ -1663,6 +1897,8 @@ if ('serviceWorker' in navigator) {
             alarmStatusSpan.textContent = 'Ready to set anchor.';
             alarmStatusSpan.className = 'safe-status';
             silenceAlarm();
+            // v8 — Al detener el monitoreo, descartar la sesión guardada.
+            clearActiveSession();
             releaseWakeLock(); // Release the screen lock when monitoring stops
 
             // Reset improvement state
@@ -1705,9 +1941,7 @@ if ('serviceWorker' in navigator) {
 
         // Initialization
         document.addEventListener('DOMContentLoaded', () => {
-            // Load user preferences only (radius + unit). The anchor position is
-            // never restored: the app always starts clean and the user must press
-            // SET ANCHOR manually for safety.
+            // Load user preferences (radius + unit + accuracy threshold).
             loadPreferences();
 
             // Show a warning if the browser does not support Wake Lock
@@ -1717,6 +1951,18 @@ if ('serviceWorker' in navigator) {
 
             // Start GPS
             startGpsWatch();
+
+            // v8 — SESSION SAFETY: si hay una sesión de fondeo reciente (<12 h)
+            // guardada (p. ej. tras un refresh accidental), mostrar el modal de
+            // confirmación. NUNCA se restaura automáticamente: el usuario debe
+            // elegir "Restore Alarm" o "Start Fresh".
+            checkForActiveSession();
+        });
+
+        // v8 — Guardar la sesión justo antes de descargar la página (refresh/cierre)
+        // para no perder un fondeo activo por un recargado accidental.
+        window.addEventListener('beforeunload', () => {
+            if (anchorLat !== null && anchorLon !== null) saveActiveSession();
         });
 
         function insertLogo(logoUrl) {
