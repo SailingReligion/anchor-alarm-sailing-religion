@@ -965,13 +965,13 @@ if ('serviceWorker' in navigator) {
         //    El modal de actualización OBLIGATORIA se mostrará automáticamente a
         //    los usuarios existentes y bloqueará el uso de la app hasta actualizar.
         // ------------------------------------------------------------
-        const APP_VERSION = 'v6';
+        const APP_VERSION = 'v7';
         const CHANGELOG = [
-            '🆘 Added How To guide and legal disclaimer',
-            '🎯 Smart anchor averaging (10 readings)',
-            '🔍 GPS accuracy filter (configurable)',
-            '🔔 GPS watchdog (2-min timeout)',
-            '🛡️ Sustained alarm (3 consecutive readings)'
+            '🔒 Fixed critical offline loading issue',
+            '📴 App now works 100% without internet',
+            '⚙️ Improved Service Worker caching (fault-tolerant)',
+            '🧭 Added navigation fallback (app-shell)',
+            '⚡ Immediate activation after install'
         ];
 
         let modalActualizacionVisible = false;

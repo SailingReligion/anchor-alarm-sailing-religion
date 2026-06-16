@@ -3,6 +3,7 @@
   "short_name": "Anchor Alarm",
   "description": "Peace of mind at anchor",
   "start_url": "./anchoralarm3.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#001f3f",
   "theme_color": "#FFD700",
